@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+import itertools
+
 import troposphere
 
 
@@ -24,7 +26,7 @@ class StratosphereObject(object):
     def __init__(self, name, **kwargs):
         self.name = name # So it is available for later calls
         self.template = kwargs.pop('template', None)
-        for prop in self.__class__.props.iterkeys():
+        for prop in itertools.chain(self.__class__.props.iterkeys(), ['Metadata']):
             if prop not in kwargs and hasattr(self, prop):
                 # Can't use getattr() because AWSObject overrides that and isn't initialized yet
                 value = object.__getattribute__(self, prop)
