@@ -21,6 +21,10 @@ import troposphere.ec2
 from .base import StratosphereObject
 
 
+class DHCPOptions(StratosphereObject, troposphere.ec2.DHCPOptions):
+    pass
+
+
 class Instance(StratosphereObject, troposphere.ec2.Instance):
     pass
 
@@ -58,6 +62,10 @@ class SubnetRouteTableAssociation(StratosphereObject, troposphere.ec2.SubnetRout
 
 
 class VPC(StratosphereObject, troposphere.ec2.VPC):
+    pass
+
+
+class VPCDHCPOptionsAssociation(StratosphereObject, troposphere.ec2.VPCDHCPOptionsAssociation):
     pass
 
 

@@ -110,6 +110,7 @@ class Template(troposphere.Template):
     __metaclass__ = TemplateMeta
 
     AUTO_SCALING_GROUP_TYPE = autoscaling.AutoScalingGroup
+    DHCP_OPTIONS_TYPE = ec2.DHCPOptions
     INSTANCE_TYPE = ec2.Instance
     INSTANCE_PROFILE_TYPE = iam.InstanceProfile
     INTERNET_GATEWAY_TYPE = ec2.InternetGateway
@@ -123,6 +124,7 @@ class Template(troposphere.Template):
     SECURITY_GROUP_TYPE = ec2.SecurityGroup
     STACK_TYPE = cloudformation.Stack
     VPC_TYPE = ec2.VPC
+    VPC_DHCP_OPTIONS_ASSOCIATION_TYPE = ec2.VPCDHCPOptionsAssociation
     VPC_GATEWAY_ATTACHEMENT_TYPE = ec2.VPCGatewayAttachment
 
     @classmethod
@@ -133,6 +135,7 @@ class Template(troposphere.Template):
             ('param', 'parameters', 'add_parameter', Parameter),
             ('out', 'outputs', 'add_output', Output),
             ('asg', 'auto_scaling_groups', 'add_resource', cls.AUTO_SCALING_GROUP_TYPE),
+            ('dhcp', 'dhcp_options', 'add_resource', cls.DHCP_OPTIONS_TYPE),
             ('elb', 'load_balancers', 'add_resource', cls.LOAD_BALANCER_TYPE),
             ('ig', 'internet_gateways', 'add_resource', cls.INTERNET_GATEWAY_TYPE),
             ('instance', 'instances', 'add_resource', cls.INSTANCE_TYPE),
@@ -145,6 +148,7 @@ class Template(troposphere.Template):
             ('stack', 'stacks', 'add_resource', cls.STACK_TYPE),
             ('subnet', 'subnets', 'add_resource', cls.SUBNET_TYPE),
             ('srta', 'subnet_route_table_associations', 'add_resource', cls.SUBNET_ROUTE_TABLE_ASSOCIATION),
+            ('vdoa', 'vpc_dhcp_options_associations', 'add_resource', cls.VPC_DHCP_OPTIONS_ASSOCIATION_TYPE),
             ('vpc', 'vpcs', 'add_resource', cls.VPC_TYPE),
             ('vga', 'vpc_gateway_attachements', 'add_resource', cls.VPC_GATEWAY_ATTACHEMENT_TYPE),
         ]
