@@ -75,16 +75,21 @@ class TemplateMeta(type):
             if value is None:
                 return value
             def _value(value, suffix=''):
-                if isinstance(value, dict):
+                description = fn.__doc__
+                if isinstance(value, dict) and value_type:
                     # Cast from dict to troposphere object (or subclass)
+                    if 'Description' in value:
+                        description = value['Description']
+                        if 'Description' not in value_type.props:
+                            del value['Description']
                     value = value_type(name+suffix, template=self, **value)
-                if fn.__doc__:
+                if description and value_type:
                     if 'Description' in value_type.props and not getattr(value, 'Description', None):
                         # Set the description based on the docstring
-                        value.Description = fn.__doc__
+                        value.Description = description
                     elif 'GroupDescription' in value_type.props and not getattr(value, 'GroupDescription', None):
                         # Security groups use GroupDescription for whatever reason
-                        value.GroupDescription = fn.__doc__
+                        value.GroupDescription = description
                     elif 'Tags' in value_type.props:
                         # Fallback, set a tag named Description
                         value.Tags = getattr(value, 'Tags', [])
@@ -93,7 +98,7 @@ class TemplateMeta(type):
                                 # If it already has a description, don't change it
                                 break
                         else:
-                            tag = {'Key': 'Description', 'Value': fn.__doc__}
+                            tag = {'Key': 'Description', 'Value': description}
                             tag.update(getattr(value_type, 'DESCRIPTION_TAG_EXTRA', {}))
                             value.Tags.append(tag)
                 return value
