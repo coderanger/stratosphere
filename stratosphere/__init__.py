@@ -131,6 +131,7 @@ class Template(troposphere.Template):
     def STRATOSPHERE_TYPES(cls):
         return [
             # (fn_prefix, collection_name, add_fn, value_type)
+            ('cond', 'conditions', 'add_condition', None),
             ('map', 'mappings', 'add_mapping', Mapping),
             ('param', 'parameters', 'add_parameter', Parameter),
             ('out', 'outputs', 'add_output', Output),
@@ -165,9 +166,13 @@ class Template(troposphere.Template):
                     value = value(self)
                 if value is None:
                     continue # Knock out via None
-                getattr(self, add_fn)(value)
-                if hasattr(value, 'post_add'):
-                    getattr(value, 'post_add')(self)
+                if not value_type or isinstance(value, value_type): # Allow not adding if its a string
+                    if value_type:
+                        getattr(self, add_fn)(value)
+                    else:
+                        getattr(self, add_fn)(key, value)
+                    if hasattr(value, 'post_add'):
+                        getattr(value, 'post_add')(self)
 
     def add_mapping(self, name_or_data, data=None):
         if not data:
