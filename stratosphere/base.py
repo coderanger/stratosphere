@@ -25,7 +25,7 @@ class StratosphereObject(object):
     """A mixin for AWS objects to make them DSL-y."""
     def __init__(self, name, **kwargs):
         self.name = name # So it is available for later calls
-        self.template = kwargs.pop('template', None)
+        self.template = template = kwargs.pop('template', None)
         for prop in itertools.chain(self.__class__.props.iterkeys(), ['Metadata', 'DependsOn']):
             if prop not in kwargs and hasattr(self, prop):
                 # Can't use getattr() because AWSObject overrides that and isn't initialized yet
@@ -47,3 +47,5 @@ class StratosphereObject(object):
             else:
                 kwargs['DependsOn'] = _nameify(kwargs['DependsOn'])
         super(StratosphereObject, self).__init__(name, **kwargs)
+        # Reset it because Troposphere set it to None again
+        self.template = template
