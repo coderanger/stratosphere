@@ -79,6 +79,7 @@ class TemplateMeta(type):
                 if isinstance(value, dict) and value_type:
                     # Cast from dict to troposphere object (or subclass)
                     if 'Description' in value:
+                        # Allow a dynamic description with the same behavior as a docstring.
                         description = value['Description']
                         if 'Description' not in value_type.props:
                             del value['Description']
