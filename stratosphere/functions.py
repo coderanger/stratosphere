@@ -41,3 +41,7 @@ class Not(troposphere.AWSHelperFn):
 
     def JSONrepr(self):
         return self.data
+
+
+# Not really a function, but close enough
+NoValue = troposphere.Ref('AWS::NoValue')
