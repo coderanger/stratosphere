@@ -58,10 +58,12 @@ class TemplateMeta(type):
                         param_name = value_type.__name__ if value_type else key
                     else:
                         param_name = key[len(fn_prefix+'_'):]
-                    value = self.troposphere_fn(value, param_name, value_type)
+                    if not d.get('ABSTRACT'):
+                        value = self.troposphere_fn(value, param_name, value_type)
                     collection[param_name] = value
                     setattr(self, key, value)
             setattr(self, collection_name, collection)
+        d.pop('ABSTRACT', None)
 
     @staticmethod
     def troposphere_fn(fn, name, value_type):
@@ -114,6 +116,7 @@ class TemplateMeta(type):
 
 class Template(troposphere.Template):
     __metaclass__ = TemplateMeta
+    ABSTRACT = True
 
     AUTO_SCALING_GROUP_TYPE = autoscaling.AutoScalingGroup
     DHCP_OPTIONS_TYPE = ec2.DHCPOptions

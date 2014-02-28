@@ -228,3 +228,25 @@ class TestTemplate(object):
             def subnet_Two(self):
                 return {'VpcId': Ref('vpc-teapot'), 'CidrBlock': '10.0.0.0/16', 'DependsOn': self.subnet_One()}
         assert self.d(MyTemplate)['Resources']['Two']['DependsOn'] == 'One'
+
+    def test_abstract(self):
+        class MyTemplate(stratosphere.Template):
+            ABSTRACT = True
+            def subnet(self):
+                return {'VpcId': Ref('vpc-teapot'), 'CidrBlock': '10.0.0.0/16'}
+        class MyTemplate2(MyTemplate):
+            def subnet(self):
+                subnet = super(MyTemplate2, self).subnet()
+                subnet['CidrBlock'] = '10.1.0.0/16'
+                return subnet
+        assert self.d(MyTemplate2) == {
+            'Resources': {
+                'Subnet': {
+                    'Properties': {
+                        'CidrBlock': '10.1.0.0/16',
+                        'VpcId': {'Ref': 'vpc-teapot'},
+                    },
+                    'Type': 'AWS::EC2::Subnet',
+                },
+            },
+        }
