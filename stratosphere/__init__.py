@@ -172,13 +172,19 @@ class Template(troposphere.Template):
                     value = value(self)
                 if value is None:
                     continue # Knock out via None
-                if not value_type or isinstance(value, value_type): # Allow not adding if its a string
-                    if value_type:
-                        getattr(self, add_fn)(value)
-                    else:
-                        getattr(self, add_fn)(key, value)
-                    if hasattr(value, 'post_add'):
-                        getattr(value, 'post_add')(self)
+                def _add(value):
+                    if not value_type or isinstance(value, value_type): # Allow not adding if its a string
+                        if value_type:
+                            getattr(self, add_fn)(value)
+                        else:
+                            getattr(self, add_fn)(key, value)
+                        if hasattr(value, 'post_add'):
+                            getattr(value, 'post_add')(self)
+                if isinstance(value, list):
+                    for v in value:
+                        _add(v)
+                else:
+                    _add(value)
 
     def add_mapping(self, name_or_data, data=None):
         if not data:
