@@ -150,3 +150,5 @@ class Template(troposphere.Template):
                 if isinstance(obj, StratospherePendingObject):
                     obj = obj.to_object()
                 value._stratosphere_type.add_to_template(self, value._stratosphere_name, obj)
+                if hasattr(obj, 'post_add'):
+                    obj.post_add(self)
