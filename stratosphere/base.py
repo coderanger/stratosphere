@@ -21,6 +21,38 @@ import itertools
 import troposphere
 
 
+class StratospherePendingObject(dict):
+    """A dict that will later on be converted to a Stratosphere/Troposphere object."""
+    def __init__(self, stratosphere_name, stratosphere_type, *args, **kwargs):
+        self._stratosphere_name = stratosphere_name
+        self._stratosphere_type = stratosphere_type
+        super(StratospherePendingObject, self).__init__(*args, **kwargs)
+
+    def to_object(self):
+        type = self._stratosphere_type
+        # Try to unify setting a description
+        if 'Description' in self:
+            description = self.pop('Description')
+            if 'Description' in self._stratosphere_type.props:
+                # Well, that was fun, wasn't it?
+                self['Description'] = description
+            elif 'GroupDescription' in self._stratosphere_type.props:
+                # Security groups use GroupDescription for whatever reason
+                self['GroupDescription'] = description
+            elif 'Tags' in type.props:
+                # Fallback, set a tag named Description
+                self.setdefault('Tags', [])
+                for tag in self['Tags']:
+                    if tag['Key'] == 'Description':
+                        # If it already has a description, don't change it
+                        break
+                else:
+                    tag = {'Key': 'Description', 'Value': description}
+                    tag.update(getattr(self._stratosphere_type, 'DESCRIPTION_TAG_EXTRA', {}))
+                    self['Tags'].append(tag)
+        return self._stratosphere_type(self._stratosphere_name, **self)
+
+
 class StratosphereObject(object):
     """A mixin for AWS objects to make them DSL-y."""
     def __init__(self, name, **kwargs):
@@ -38,7 +70,9 @@ class StratosphereObject(object):
         # Auto-name-ify DependsOn
         if 'DependsOn' in kwargs:
             def _nameify(obj):
-                if isinstance(obj, troposphere.AWSObject):
+                if isinstance(obj, StratospherePendingObject):
+                    return obj._stratosphere_name
+                elif isinstance(obj, troposphere.AWSObject):
                     return obj.name
                 else:
                     return obj
@@ -49,3 +83,9 @@ class StratosphereObject(object):
         super(StratosphereObject, self).__init__(name, **kwargs)
         # Reset it because Troposphere set it to None again
         self.template = template
+
+    @classmethod
+    def add_to_template(cls, template, name, obj):
+        """Add an object to a given template."""
+        if isinstance(obj, troposphere.AWSObject):
+            template.add_resource(obj)

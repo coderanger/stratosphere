@@ -18,8 +18,26 @@
 
 import troposphere
 
+from .base import StratospherePendingObject
 
-class And(troposphere.AWSHelperFn):
+
+__all__ = ['And', 'Base64', 'Equals', 'FindInMap', 'GetAtt', 'GetAZs', 'If',
+           'Join', 'Name', 'Not', 'NoValue', 'Select', 'Ref']
+
+
+class AWSHelperFn(troposphere.AWSHelperFn):
+    def getdata(self, obj):
+        if isinstance(obj, StratospherePendingObject):
+            return obj._stratosphere_name
+        return super(AWSHelperFn, self).getdata(obj)
+
+
+# Not really a function, but close enough
+NoValue = troposphere.Ref('AWS::NoValue')
+
+
+# Functions not implemented in troposphere
+class And(AWSHelperFn):
     def __init__(self, *terms):
         self.data = {'Fn::And': terms}
 
@@ -27,7 +45,7 @@ class And(troposphere.AWSHelperFn):
         return self.data
 
 
-class Equals(troposphere.AWSHelperFn):
+class Equals(AWSHelperFn):
     def __init__(self, value_1, value_2):
         self.data = {'Fn::Equals': [value_1, value_2]}
 
@@ -35,7 +53,7 @@ class Equals(troposphere.AWSHelperFn):
         return self.data
 
 
-class Not(troposphere.AWSHelperFn):
+class Not(AWSHelperFn):
     def __init__(self, value):
         self.data = {'Fn::Not': [value]}
 
@@ -43,5 +61,38 @@ class Not(troposphere.AWSHelperFn):
         return self.data
 
 
-# Not really a function, but close enough
-NoValue = troposphere.Ref('AWS::NoValue')
+# Wrappers to use my mixin
+class Base64(AWSHelperFn, troposphere.Base64):
+    pass
+
+
+class FindInMap(AWSHelperFn, troposphere.FindInMap):
+    pass
+
+
+class GetAtt(AWSHelperFn, troposphere.GetAtt):
+    pass
+
+
+class GetAZs(AWSHelperFn, troposphere.GetAZs):
+    pass
+
+
+class If(AWSHelperFn, troposphere.If):
+    pass
+
+
+class Join(AWSHelperFn, troposphere.Join):
+    pass
+
+
+class Name(AWSHelperFn, troposphere.Name):
+    pass
+
+
+class Ref(AWSHelperFn, troposphere.Ref):
+    pass
+
+
+class Select(AWSHelperFn, troposphere.Select):
+    pass

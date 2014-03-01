@@ -22,14 +22,19 @@ import functools
 import troposphere
 
 from . import autoscaling, cloudformation, ec2, elasticloadbalancing, iam
-from .base import StratosphereObject
+from .base import StratospherePendingObject, StratosphereObject
+from .functions import *
 
 class Parameter(StratosphereObject, troposphere.Parameter):
-    pass
+    @classmethod
+    def add_to_template(cls, template, name, obj):
+        template.add_parameter(obj)
 
 
 class Output(StratosphereObject, troposphere.Output):
-    pass
+    @classmethod
+    def add_to_template(cls, template, name, obj):
+        template.add_output(obj)
 
 
 class Mapping(troposphere.AWSObject):
@@ -43,125 +48,92 @@ class Mapping(troposphere.AWSObject):
     def JSONrepr(self):
         return self.data
 
+    @classmethod
+    def add_to_template(cls, template, name, obj):
+        template.add_mapping(name, obj.data)
+
+
+class Condition(troposphere.AWSObject):
+    props = {}
+
+    def __init__(self, name, template=None, **kwargs): # FIXMEFIXMEFIXMEFIXME
+        self.data = kwargs
+        self.template = template
+        super(Mapping, self).__init__(name)
+
+    def JSONrepr(self):
+        return self.data
+
+    @classmethod
+    def add_to_template(cls, template, name, obj):
+        template.add_condition(name, obj)
+
+
+def cfn(name, type):
+    def decorator(fn):
+        @functools.wraps(fn)
+        def inner(self, *args, **kwargs):
+            value = fn(self, *args, **kwargs)
+            if isinstance(value, dict):
+                if fn.__doc__:
+                    value.setdefault('Description', fn.__doc__)
+                value['template'] = self
+                value = StratospherePendingObject(name, type, **value)
+            return value
+        inner._stratosphere_name = name
+        inner._stratosphere_type = type
+        return inner
+    return decorator
+
 
 class TemplateMeta(type):
     def __init__(self, name, bases, d):
-        for fn_prefix, collection_name, add_fn, value_type in self.STRATOSPHERE_TYPES():
-            collection = collections.OrderedDict()
-            # Pull in base class data
-            if bases and hasattr(bases[0], collection_name):
-                collection.update(getattr(bases[0], collection_name))
-            # Process any magic methods
-            for key, value in d.iteritems():
-                if (key == fn_prefix or key.startswith(fn_prefix+'_')) and callable(value):
-                    if key == fn_prefix:
-                        param_name = value_type.__name__ if value_type else key
-                    else:
-                        param_name = key[len(fn_prefix+'_'):]
-                    if not d.get('ABSTRACT'):
-                        value = self.troposphere_fn(value, param_name, value_type)
-                    collection[param_name] = value
-                    setattr(self, key, value)
-            setattr(self, collection_name, collection)
-        d.pop('ABSTRACT', None)
-
-    @staticmethod
-    def troposphere_fn(fn, name, value_type):
-        cache = {}
-        @functools.wraps(fn)
-        def inner(self):
-            value = cache.get(name)
-            if value is not None:
-                return value
-            value = fn(self)
-            if value is None:
-                return value
-            def _value(value, suffix=''):
-                description = fn.__doc__
-                if isinstance(value, dict) and value_type:
-                    # Cast from dict to troposphere object (or subclass)
-                    if 'Description' in value:
-                        # Allow a dynamic description with the same behavior as a docstring.
-                        description = value['Description']
-                        if 'Description' not in value_type.props:
-                            del value['Description']
-                    value = value_type(name+suffix, template=self, **value)
-                if description and value_type:
-                    if 'Description' in value_type.props and not getattr(value, 'Description', None):
-                        # Set the description based on the docstring
-                        value.Description = description
-                    elif 'GroupDescription' in value_type.props and not getattr(value, 'GroupDescription', None):
-                        # Security groups use GroupDescription for whatever reason
-                        value.GroupDescription = description
-                    elif 'Tags' in value_type.props:
-                        # Fallback, set a tag named Description
-                        value.Tags = getattr(value, 'Tags', [])
-                        for tag in value.Tags:
-                            if tag['Key'] == 'Description':
-                                # If it already has a description, don't change it
-                                break
-                        else:
-                            tag = {'Key': 'Description', 'Value': description}
-                            tag.update(getattr(value_type, 'DESCRIPTION_TAG_EXTRA', {}))
-                            value.Tags.append(tag)
-                return value
-            if isinstance(value, list):
-                value = [_value(v, str(i)) for i, v in enumerate(value)]
+        types = self.STRATOSPHERE_TYPES()
+        for key, value in d.iteritems():
+            if key.startswith('_'):
+                continue
+            parts = key.split('_', 1)
+            prefix = parts[0]
+            value_type = types.get(prefix)
+            if not value_type:
+                continue
+            if len(parts) == 1:
+                name = value_type.__name__ if value_type else key
             else:
-                value = _value(value)
-            cache[name] = value
-            return value
-        return inner
+                name = parts[1]
+            # Apply the @cfn() decorator
+            value = cfn(name, value_type)(value)
+            setattr(self, key, value)
 
 
 class Template(troposphere.Template):
     __metaclass__ = TemplateMeta
-    ABSTRACT = True
-
-    AUTO_SCALING_GROUP_TYPE = autoscaling.AutoScalingGroup
-    DHCP_OPTIONS_TYPE = ec2.DHCPOptions
-    INSTANCE_TYPE = ec2.Instance
-    INSTANCE_PROFILE_TYPE = iam.InstanceProfile
-    INTERNET_GATEWAY_TYPE = ec2.InternetGateway
-    LOAD_BALANCER_TYPE = elasticloadbalancing.LoadBalancer
-    LAUNCH_CONFIGURATION_TYPE = autoscaling.LaunchConfiguration
-    ROLE_TYPE = iam.Role
-    ROUTE_TYPE = ec2.Route
-    ROUTE_TABLE_TYPE = ec2.RouteTable
-    SUBNET_TYPE = ec2.Subnet
-    SUBNET_ROUTE_TABLE_ASSOCIATION = ec2.SubnetRouteTableAssociation
-    SECURITY_GROUP_TYPE = ec2.SecurityGroup
-    STACK_TYPE = cloudformation.Stack
-    VPC_TYPE = ec2.VPC
-    VPC_DHCP_OPTIONS_ASSOCIATION_TYPE = ec2.VPCDHCPOptionsAssociation
-    VPC_GATEWAY_ATTACHEMENT_TYPE = ec2.VPCGatewayAttachment
 
     @classmethod
     def STRATOSPHERE_TYPES(cls):
-        return [
-            # (fn_prefix, collection_name, add_fn, value_type)
-            ('cond', 'conditions', 'add_condition', None),
-            ('map', 'mappings', 'add_mapping', Mapping),
-            ('param', 'parameters', 'add_parameter', Parameter),
-            ('out', 'outputs', 'add_output', Output),
-            ('asg', 'auto_scaling_groups', 'add_resource', cls.AUTO_SCALING_GROUP_TYPE),
-            ('dhcp', 'dhcp_options', 'add_resource', cls.DHCP_OPTIONS_TYPE),
-            ('elb', 'load_balancers', 'add_resource', cls.LOAD_BALANCER_TYPE),
-            ('ig', 'internet_gateways', 'add_resource', cls.INTERNET_GATEWAY_TYPE),
-            ('instance', 'instances', 'add_resource', cls.INSTANCE_TYPE),
-            ('insp', 'instance_profiles', 'add_resource', cls.INSTANCE_PROFILE_TYPE),
-            ('lc', 'launch_configurations', 'add_resource', cls.LAUNCH_CONFIGURATION_TYPE),
-            ('role', 'roles', 'add_resource', cls.ROLE_TYPE),
-            ('route', 'routes', 'add_resource', cls.ROUTE_TYPE),
-            ('rtb', 'route_tables', 'add_resource', cls.ROUTE_TABLE_TYPE),
-            ('sg', 'security_groups', 'add_resource', cls.SECURITY_GROUP_TYPE),
-            ('stack', 'stacks', 'add_resource', cls.STACK_TYPE),
-            ('subnet', 'subnets', 'add_resource', cls.SUBNET_TYPE),
-            ('srta', 'subnet_route_table_associations', 'add_resource', cls.SUBNET_ROUTE_TABLE_ASSOCIATION),
-            ('vdoa', 'vpc_dhcp_options_associations', 'add_resource', cls.VPC_DHCP_OPTIONS_ASSOCIATION_TYPE),
-            ('vpc', 'vpcs', 'add_resource', cls.VPC_TYPE),
-            ('vga', 'vpc_gateway_attachements', 'add_resource', cls.VPC_GATEWAY_ATTACHEMENT_TYPE),
-        ]
+        return {
+            'cond': Condition,
+            'map': Mapping,
+            'param': Parameter,
+            'out': Output,
+            'asg': autoscaling.AutoScalingGroup,
+            'dhcp': ec2.DHCPOptions,
+            'elb': elasticloadbalancing.LoadBalancer,
+            'ig': ec2.InternetGateway,
+            'instance': ec2.Instance,
+            'insp': iam.InstanceProfile,
+            'lc': autoscaling.LaunchConfiguration,
+            'role': iam.Role,
+            'route': ec2.Route,
+            'rtb': ec2.RouteTable,
+            'sg': ec2.SecurityGroup,
+            'stack': cloudformation.Stack,
+            'subnet': ec2.Subnet,
+            'srta': ec2.SubnetRouteTableAssociation,
+            'vdoa': ec2.VPCDHCPOptionsAssociation,
+            'vpc': ec2.VPC,
+            'vga': ec2.VPCGatewayAttachment,
+        }
 
     def __init__(self):
         super(Template, self).__init__()
@@ -169,29 +141,12 @@ class Template(troposphere.Template):
         if self.__class__.__doc__:
             self.add_description(self.__class__.__doc__)
         # Process all magic methods
-        for fn_prefix, collection_name, add_fn, value_type in self.STRATOSPHERE_TYPES():
-            for key, value in getattr(self.__class__, collection_name).iteritems():
-                if callable(value):
-                    value = value(self)
-                if value is None:
-                    continue # Knock out via None
-                def _add(value):
-                    if not value_type or isinstance(value, value_type): # Allow not adding if its a string
-                        if value_type:
-                            getattr(self, add_fn)(value)
-                        else:
-                            getattr(self, add_fn)(key, value)
-                        if hasattr(value, 'post_add'):
-                            getattr(value, 'post_add')(self)
-                if isinstance(value, list):
-                    for v in value:
-                        _add(v)
-                else:
-                    _add(value)
-
-    def add_mapping(self, name_or_data, data=None):
-        if not data:
-            # Allow passing either one or two arguments
-            data = name_or_data
-            name_or_data = data.name
-        super(Template, self).add_mapping(name_or_data, data)
+        for key in dir(self):
+            value = getattr(self, key)
+            if getattr(value, '_stratosphere_type', False):
+                obj = value()
+                if not obj:
+                    continue # Returning none is a knockout
+                if isinstance(obj, StratospherePendingObject):
+                    obj = obj.to_object()
+                value._stratosphere_type.add_to_template(self, value._stratosphere_name, obj)
